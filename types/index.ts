@@ -17,8 +17,8 @@ export interface Item {
   userId: string;
   listId: string;
   completed: boolean;
-  link: string | null;        // Alterado de ? (undefined) para string | null
-  observation: string | null; // Alterado de ? (undefined) para string | null
+  link: string | null;
+  observation: string | null;
 }
 
 export interface ShoppingList {

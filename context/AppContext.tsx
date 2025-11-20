@@ -30,6 +30,21 @@ interface AppContextType {
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// Função auxiliar para converter qualquer valor em número de forma segura
+const safeParseFloat = (value: any): number => {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  
+  if (typeof value === 'string') {
+    // Troca vírgula por ponto (padrão BR -> US) e remove caracteres não numéricos exceto ponto e traço
+    const cleanValue = value.replace(',', '.').trim();
+    const parsed = parseFloat(cleanValue);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  
+  return 0;
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,16 +58,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [grandTotal, setGrandTotal] = useState(0);
   const [grandTotalPaid, setGrandTotalPaid] = useState(0);
 
-  // --- LÓGICA DE CÁLCULO (CORRIGIDA) ---
+  // --- LÓGICA DE CÁLCULO (CORRIGIDA COM SAFEPARSEFLOAT) ---
   const calculateLocalStats = (currentItems: Item[]) => {
     const stats: Record<string, CategoryStats> = {};
     let total = 0;
     let totalPaid = 0;
     
     currentItems.forEach(item => {
-      // Proteção Extrema: Converte para número, se falhar vira 0
-      const price = typeof item.price === 'string' ? parseFloat(item.price) : Number(item.price);
-      const safePrice = isNaN(price) ? 0 : price;
+      // Usa a função segura para garantir que é número
+      const safePrice = safeParseFloat(item.price);
       
       // Totais Globais
       total += safePrice;
@@ -161,7 +175,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           .eq('userId', user.id);
         if (cats) setCategories(cats);
 
-        // 3. Itens (Com conversão de preço)
+        // 3. Itens (Com conversão segura de preço)
         if (listId) {
           const { data: listItems } = await supabase
             .from('items')
@@ -171,7 +185,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (listItems) {
               const safeItems: Item[] = listItems.map(i => ({
                   ...i,
-                  price: Number(i.price), // Converte string do banco para number JS
+                  price: safeParseFloat(i.price), // Converte usando safeParseFloat
                   link: i.link || null,
                   observation: i.observation || null
               }));
@@ -283,7 +297,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addItem = async (name: string, price: number, categoryId: string, link?: string | null, observation?: string | null) => {
       if(!user || !currentList) return;
       
-      const numericPrice = Number(price); // Garantia final
+      const numericPrice = safeParseFloat(price); // Garantia final usando safeParseFloat
       
       const newItem: Omit<Item, 'id'> = {
           name,
@@ -304,7 +318,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
       
       if (data && !error) {
-        setItems(prev => prev.map(i => i.id === tempId ? { ...data, price: Number(data.price) } : i));
+        // Ao receber do banco, converte novamente para garantir
+        setItems(prev => prev.map(i => i.id === tempId ? { ...data, price: safeParseFloat(data.price) } : i));
       } else {
           setItems(prev => prev.filter(i => i.id !== tempId)); // Remove se falhar
       }
@@ -314,7 +329,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // Garante numérico se houver preço
       const cleanUpdates = { ...updates };
       if (cleanUpdates.price !== undefined) {
-          cleanUpdates.price = Number(cleanUpdates.price);
+          cleanUpdates.price = safeParseFloat(cleanUpdates.price);
       }
 
       setItems(prev => prev.map(item => item.id === itemId ? { ...item, ...cleanUpdates } : item));

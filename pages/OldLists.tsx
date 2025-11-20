@@ -36,6 +36,17 @@ const OldLists: React.FC = () => {
         fetchLists();
     }, [user, currentList]);
 
+    // Função segura local para evitar erros em listas antigas
+    const safeParsePrice = (val: any) => {
+        if (typeof val === 'number') return val;
+        if (typeof val === 'string') {
+            const clean = val.replace(',', '.').trim();
+            const num = parseFloat(clean);
+            return isNaN(num) ? 0 : num;
+        }
+        return 0;
+    };
+
     const handleSelectList = async (listId: string) => {
         if (selectedListId === listId) {
             setSelectedListId(null);
@@ -52,7 +63,7 @@ const OldLists: React.FC = () => {
             if (data) {
                  const sanitizedItems = data.map(item => ({
                     ...item,
-                    price: Number(item.price) // Força número
+                    price: safeParsePrice(item.price) // Força número de forma segura
                 }));
                 setSelectedListItems(sanitizedItems);
             }
@@ -63,7 +74,7 @@ const OldLists: React.FC = () => {
         }
     };
 
-    const calculateTotal = (items: Item[]) => items.reduce((acc, item) => acc + Number(item.price), 0);
+    const calculateTotal = (items: Item[]) => items.reduce((acc, item) => acc + safeParsePrice(item.price), 0);
 
     return (
         <div className="flex flex-col h-screen">

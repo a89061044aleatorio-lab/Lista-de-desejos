@@ -71,45 +71,27 @@ const Dashboard: React.FC = () => {
       <Header onMenuClick={() => setMenuOpen(true)} />
       <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} />
       
-      <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-100 dark:bg-slate-900">
-        <div className="max-w-7xl mx-auto space-y-6">
+      <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-100 dark:bg-slate-900 pb-24">
+        <div className="max-w-4xl mx-auto space-y-6">
             
-            {/* 1. Painel de Resumo Geral (Total da Lista) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-indigo-500">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Total Previsto</p>
-                    <p className="text-2xl font-bold text-gray-800 dark:text-white">R$ {grandTotal.toFixed(2)}</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-green-500">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Já Pago</p>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">R$ {grandTotalPaid.toFixed(2)}</p>
-                </div>
-                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow border-l-4 border-red-500">
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Falta Pagar</p>
-                    <p className="text-2xl font-bold text-red-600 dark:text-red-400">R$ {(grandTotal - grandTotalPaid).toFixed(2)}</p>
-                </div>
+            {/* Controles Principais em Bloco Retangular Cinza Claro - Alinhado à Esquerda */}
+            <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-lg shadow-inner flex gap-4 items-center justify-start">
+                <button 
+                    onClick={() => { setCategoryToEdit(null); setCategoryModalOpen(true); }} 
+                    className="bg-indigo-600 text-white px-4 py-2 rounded shadow hover:bg-indigo-700 transition-colors font-medium text-sm sm:text-base"
+                >
+                    + Categoria
+                </button>
+                <button 
+                    onClick={() => setItemModalOpen(true)} 
+                    className="bg-green-600 text-white px-4 py-2 rounded shadow hover:bg-green-700 transition-colors font-medium text-sm sm:text-base"
+                    disabled={categories.length === 0}
+                >
+                    + Item
+                </button>
             </div>
 
-            {/* 2. Controles Principais */}
-            <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
-                <div className="flex items-center gap-4 w-full sm:w-auto">
-                    <button 
-                        onClick={() => { setCategoryToEdit(null); setCategoryModalOpen(true); }} 
-                        className="flex-1 sm:flex-none px-6 py-3 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none transition-transform transform hover:scale-105"
-                    >
-                        + Categoria
-                    </button>
-                    <button 
-                        onClick={() => setItemModalOpen(true)} 
-                        className="flex-1 sm:flex-none px-6 py-3 text-base font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 focus:outline-none transition-transform transform hover:scale-105" 
-                        disabled={categories.length === 0}
-                    >
-                        + Item
-                    </button>
-                </div>
-            </div>
-
-            {/* 3. Listagem de Categorias */}
+            {/* Listagem de Categorias */}
             <div className="space-y-6">
                 {visibleCategories.length === 0 && (
                     <div className="text-center py-10 px-4 bg-white dark:bg-gray-800 rounded-lg shadow">
@@ -194,11 +176,23 @@ const Dashboard: React.FC = () => {
         </div>
       </main>
       
+      {/* Rodapé Fixo de Totais (Discreto) */}
+      <div className="fixed bottom-0 left-0 w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 shadow-lg z-10 flex justify-between items-center px-6">
+          <div className="flex flex-col">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Total da Lista</span>
+              <span className="text-lg font-bold text-gray-900 dark:text-white">R$ {grandTotal.toFixed(2)}</span>
+          </div>
+          <div className="flex flex-col items-end">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Já Pago</span>
+              <span className="text-lg font-bold text-green-600 dark:text-green-400">R$ {grandTotalPaid.toFixed(2)}</span>
+          </div>
+      </div>
+      
       <AddCategoryModal isOpen={isCategoryModalOpen} onClose={handleCloseCategoryModal} categoryToEdit={categoryToEdit} />
       <AddItemModal isOpen={isItemModalOpen} onClose={handleCloseItemModal} itemToEdit={itemToEdit} />
       <ConfirmModal isOpen={!!categoryToDelete} onClose={() => setCategoryToDelete(null)} onConfirm={confirmDeleteCategory} title="Excluir Categoria" message={`Deseja excluir a categoria "${categoryToDelete?.name}" e todos os seus itens?`} />
       <Chat isOpen={isChatOpen} onClose={() => setChatOpen(false)} />
-      <button onClick={() => setChatOpen(true)} className="fixed bottom-6 right-6 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 z-20"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></button>
+      <button onClick={() => setChatOpen(true)} className="fixed bottom-20 right-6 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 z-20"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></button>
     </div>
   );
 };
