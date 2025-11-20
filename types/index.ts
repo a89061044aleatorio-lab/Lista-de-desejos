@@ -36,3 +36,10 @@ export interface Message {
   timestamp: string;
   userEmail: string;
 }
+
+export interface CategoryStats {
+  categoryId: string;
+  total: number;
+  paid: number;
+  pending: number;
+}

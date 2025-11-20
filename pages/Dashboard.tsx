@@ -9,7 +9,7 @@ import Chat from '../components/Chat';
 import { Item, Category } from '../types';
 
 const Dashboard: React.FC = () => {
-  const { categories, items, toggleItemCompleted, deleteItem, deleteCategory } = useAppContext();
+  const { categories, items, toggleItemCompleted, deleteItem, deleteCategory, categoryStats } = useAppContext();
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isCategoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
@@ -31,20 +31,9 @@ const Dashboard: React.FC = () => {
     return grouped;
   }, [items]);
   
-  const categoryTotals = useMemo(() => {
-    const totals: { [key: string]: { total: number; pending: number; paid: number } } = {};
-    categories.forEach(category => {
-        const categoryItems = itemsByCategory[category.id] || [];
-        // Force Number conversion to ensure sums are correct, not string concatenation
-        const total = categoryItems.reduce((sum, item) => sum + Number(item.price), 0);
-        const pending = categoryItems
-            .filter(item => !item.completed)
-            .reduce((sum, item) => sum + Number(item.price), 0);
-        const paid = total - pending;
-        totals[category.id] = { total, pending, paid };
-    });
-    return totals;
-  }, [categories, itemsByCategory]);
+  // Nota: Os totais (categoryTotals) foram removidos daqui.
+  // Agora usamos diretamente o objeto `categoryStats` vindo do AppContext,
+  // que contém os valores calculados pelo banco de dados.
 
   // Abre o modal de confirmação
   const handleDeleteCategoryClick = (id: string, name: string) => {
@@ -149,11 +138,12 @@ const Dashboard: React.FC = () => {
                              <div className="flex gap-4 text-sm font-semibold text-gray-700 dark:text-gray-300 text-right">
                                 <div>
                                     <span>A Pagar: </span>
-                                    <span className="font-bold text-red-600 dark:text-red-400">R$ {(categoryTotals[category.id]?.pending || 0).toFixed(2)}</span>
+                                    {/* Usando valores diretos do categoryStats */}
+                                    <span className="font-bold text-red-600 dark:text-red-400">R$ {(categoryStats[category.id]?.pending || 0).toFixed(2)}</span>
                                 </div>
                                 <div>
                                     <span>Já Pago: </span>
-                                    <span className="font-bold text-green-600 dark:text-green-400">R$ {(categoryTotals[category.id]?.paid || 0).toFixed(2)}</span>
+                                    <span className="font-bold text-green-600 dark:text-green-400">R$ {(categoryStats[category.id]?.paid || 0).toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
