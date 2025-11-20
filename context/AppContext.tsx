@@ -30,15 +30,41 @@ interface AppContextType {
 
 export const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Função auxiliar para converter qualquer valor em número de forma segura
+// --- FUNÇÃO BLINDADA PARA CONVERSÃO DE PREÇO (PADRÃO BRASIL) ---
 const safeParseFloat = (value: any): number => {
   if (value === null || value === undefined) return 0;
   if (typeof value === 'number') return isNaN(value) ? 0 : value;
   
   if (typeof value === 'string') {
-    // Troca vírgula por ponto (padrão BR -> US) e remove caracteres não numéricos exceto ponto e traço
-    const cleanValue = value.replace(',', '.').trim();
-    const parsed = parseFloat(cleanValue);
+    let clean = value.trim();
+    
+    // Se estiver vazio
+    if (clean === '') return 0;
+
+    // 1. Remove símbolos de moeda e espaços extras
+    clean = clean.replace('R$', '').replace(/\s/g, '');
+
+    // 2. Detecção de formato Brasileiro (1.200,50 ou 10,50)
+    // Se tiver vírgula, assumimos que é o separador decimal
+    if (clean.includes(',')) {
+      // Remove TODOS os pontos (separadores de milhar: 1.200 -> 1200)
+      clean = clean.replace(/\./g, '');
+      // Troca a vírgula por ponto (decimal: 1200,50 -> 1200.50)
+      clean = clean.replace(',', '.');
+    } 
+    // Se NÃO tiver vírgula, mas tiver múltiplos pontos (ex: 1.200.00)
+    else if ((clean.match(/\./g) || []).length > 1) {
+       clean = clean.replace(/\./g, '');
+    }
+    // Se tiver APENAS UM ponto e parecer milhar (ex: 1.200), remove o ponto
+    // (Assume-se que ninguém vai digitar 1 real e 200 milésimos de centavo em lista de compras)
+    else if (clean.includes('.') && clean.split('.')[1].length === 3) {
+       // CUIDADO: Isso assume que 1.200 é mil e duzentos, não 1 ponto 2
+       // Para segurança em lista de compras, geralmente assumimos ponto como decimal se não houver vírgula,
+       // mas para evitar erro de "mil", vamos manter o padrão JS se for um ponto só.
+    }
+
+    const parsed = parseFloat(clean);
     return isNaN(parsed) ? 0 : parsed;
   }
   
@@ -58,14 +84,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [grandTotal, setGrandTotal] = useState(0);
   const [grandTotalPaid, setGrandTotalPaid] = useState(0);
 
-  // --- LÓGICA DE CÁLCULO (CORRIGIDA COM SAFEPARSEFLOAT) ---
+  // --- LÓGICA DE CÁLCULO (USANDO O PARSER BLINDADO) ---
   const calculateLocalStats = (currentItems: Item[]) => {
     const stats: Record<string, CategoryStats> = {};
     let total = 0;
     let totalPaid = 0;
     
     currentItems.forEach(item => {
-      // Usa a função segura para garantir que é número
+      // Converte o preço usando a função robusta
       const safePrice = safeParseFloat(item.price);
       
       // Totais Globais
@@ -185,7 +211,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (listItems) {
               const safeItems: Item[] = listItems.map(i => ({
                   ...i,
-                  price: safeParseFloat(i.price), // Converte usando safeParseFloat
+                  // Força conversão assim que chega do banco
+                  price: safeParseFloat(i.price), 
                   link: i.link || null,
                   observation: i.observation || null
               }));
@@ -256,7 +283,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const archiveCategory = (categoryId: string) => {
-      deleteCategory(categoryId); // Mantendo comportamento simplificado solicitado
+      deleteCategory(categoryId); 
   };
 
   const deleteCategory = async (categoryId: string) => {
@@ -270,25 +297,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setItems(prev => prev.filter(i => i.categoryId !== categoryId));
 
       try {
-          // 1. Tenta deletar a categoria (Se Cascade estiver ativo no SQL, apaga tudo)
           const { error: catError } = await supabase
               .from('categories')
               .delete()
               .eq('id', categoryId);
 
           if (catError) {
-              console.warn("Cascade falhou ou não configurado. Tentando exclusão manual de itens...");
-              
-              // Fallback: Apaga itens manualmente primeiro
+              console.warn("Cascade falhou. Tentando exclusão manual...");
               await supabase.from('items').delete().eq('categoryId', categoryId);
               const { error: retryError } = await supabase.from('categories').delete().eq('id', categoryId);
-              
               if (retryError) throw retryError;
           }
       } catch (error: any) {
           console.error("Erro fatal ao excluir categoria:", error);
-          alert("Não foi possível excluir a categoria. Tente novamente.");
-          // Rollback em caso de erro
+          alert("Não foi possível excluir a categoria.");
           setCategories(previousCategories);
           setItems(previousItems);
       }
@@ -297,7 +319,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addItem = async (name: string, price: number, categoryId: string, link?: string | null, observation?: string | null) => {
       if(!user || !currentList) return;
       
-      const numericPrice = safeParseFloat(price); // Garantia final usando safeParseFloat
+      // GARANTIA DE NÚMERO PURO ANTES DE SALVAR
+      const numericPrice = safeParseFloat(price); 
       
       const newItem: Omit<Item, 'id'> = {
           name,
@@ -310,7 +333,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           observation: observation || null
       };
       
-      // UI Otimista
       const tempId = `temp-${Date.now()}`;
       const optimisticItem: Item = { ...newItem, id: tempId };
       setItems(prev => [...prev, optimisticItem]);
@@ -318,15 +340,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
       
       if (data && !error) {
-        // Ao receber do banco, converte novamente para garantir
         setItems(prev => prev.map(i => i.id === tempId ? { ...data, price: safeParseFloat(data.price) } : i));
       } else {
-          setItems(prev => prev.filter(i => i.id !== tempId)); // Remove se falhar
+          setItems(prev => prev.filter(i => i.id !== tempId));
       }
   };
 
   const updateItem = async (itemId: string, updates: Partial<Item>) => {
-      // Garante numérico se houver preço
       const cleanUpdates = { ...updates };
       if (cleanUpdates.price !== undefined) {
           cleanUpdates.price = safeParseFloat(cleanUpdates.price);
@@ -359,8 +379,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString(),
           userEmail: user.email,
       };
-      
-      // UI Otimista para Chat
       const tempId = `msg-${Date.now()}`;
       const optimisticMessage = { ...newMessage, id: tempId, userEmail: user.email! };
       setMessages(prev => [...prev, optimisticMessage]);

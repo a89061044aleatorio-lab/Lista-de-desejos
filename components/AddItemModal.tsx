@@ -21,7 +21,8 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
     if (isOpen) {
         if (itemToEdit) {
             setName(itemToEdit.name);
-            setPrice(itemToEdit.price.toString().replace('.', ',')); // Mostra com vírgula para o usuário BR
+            // Ao editar, converte ponto pra vírgula para ficar bonito no input
+            setPrice(itemToEdit.price.toString().replace('.', ',')); 
             setCategoryId(itemToEdit.categoryId);
             setLink(itemToEdit.link || '');
             setObservation(itemToEdit.observation || '');
@@ -37,20 +38,33 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
     }
   }, [isOpen, itemToEdit, categories]);
 
+  // Função auxiliar local para limpar o input
+  const cleanInputPrice = (val: string): number => {
+      if (!val) return 0;
+      let clean = val.replace('R$', '').trim();
+      
+      // Lógica BR: Se tiver vírgula, remove pontos antes.
+      if (clean.includes(',')) {
+          clean = clean.replace(/\./g, ''); // Remove ponto de milhar (1.200 -> 1200)
+          clean = clean.replace(',', '.');  // Troca vírgula decimal (1200,50 -> 1200.50)
+      }
+      
+      const num = parseFloat(clean);
+      return isNaN(num) ? 0 : num;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && price && categoryId) {
-      // TRATAMENTO DE PREÇO ROBUSTO
-      // Troca vírgula por ponto (10,50 -> 10.50) e remove R$ se houver
-      const cleanPrice = price.replace('R$', '').replace(/\s/g, '').replace(',', '.');
-      const numericPrice = parseFloat(cleanPrice);
+      
+      // Converte usando a lógica robusta
+      const numericPrice = cleanInputPrice(price);
       
       if (isNaN(numericPrice)) {
         alert("Por favor, digite um preço válido.");
         return;
       }
       
-      // Define explicitamente como null se estiver vazio
       const finalLink = link.trim() || null;
       const finalObservation = observation.trim() || null;
       

@@ -36,11 +36,15 @@ const OldLists: React.FC = () => {
         fetchLists();
     }, [user, currentList]);
 
-    // Função segura local para evitar erros em listas antigas
+    // Função segura local (BR)
     const safeParsePrice = (val: any) => {
         if (typeof val === 'number') return val;
         if (typeof val === 'string') {
-            const clean = val.replace(',', '.').trim();
+            let clean = val.trim();
+            if (clean.includes(',')) {
+                clean = clean.replace(/\./g, '');
+                clean = clean.replace(',', '.');
+            }
             const num = parseFloat(clean);
             return isNaN(num) ? 0 : num;
         }
@@ -63,7 +67,9 @@ const OldLists: React.FC = () => {
             if (data) {
                  const sanitizedItems = data.map(item => ({
                     ...item,
-                    price: safeParsePrice(item.price) // Força número de forma segura
+                    price: safeParsePrice(item.price),
+                    link: item.link || null,
+                    observation: item.observation || null
                 }));
                 setSelectedListItems(sanitizedItems);
             }
