@@ -11,7 +11,7 @@ import { Item, Category } from '../types';
 const Dashboard: React.FC = () => {
   const { 
       categories, items, toggleItemCompleted, deleteItem, deleteCategory, 
-      categoryStats, grandTotal, grandTotalPaid 
+      categoryStats 
   } = useAppContext();
   
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -71,7 +71,7 @@ const Dashboard: React.FC = () => {
       <Header onMenuClick={() => setMenuOpen(true)} />
       <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} />
       
-      <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-100 dark:bg-slate-900 pb-24">
+      <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-100 dark:bg-slate-900">
         <div className="max-w-4xl mx-auto space-y-6">
             
             {/* Controles Principais em Bloco Retangular Cinza Claro - Alinhado à Esquerda */}
@@ -176,23 +176,11 @@ const Dashboard: React.FC = () => {
         </div>
       </main>
       
-      {/* Rodapé Fixo de Totais (Discreto) */}
-      <div className="fixed bottom-0 left-0 w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 shadow-lg z-10 flex justify-between items-center px-6">
-          <div className="flex flex-col">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Total da Lista</span>
-              <span className="text-lg font-bold text-gray-900 dark:text-white">R$ {grandTotal.toFixed(2)}</span>
-          </div>
-          <div className="flex flex-col items-end">
-              <span className="text-xs text-gray-500 dark:text-gray-400">Já Pago</span>
-              <span className="text-lg font-bold text-green-600 dark:text-green-400">R$ {grandTotalPaid.toFixed(2)}</span>
-          </div>
-      </div>
-      
       <AddCategoryModal isOpen={isCategoryModalOpen} onClose={handleCloseCategoryModal} categoryToEdit={categoryToEdit} />
       <AddItemModal isOpen={isItemModalOpen} onClose={handleCloseItemModal} itemToEdit={itemToEdit} />
       <ConfirmModal isOpen={!!categoryToDelete} onClose={() => setCategoryToDelete(null)} onConfirm={confirmDeleteCategory} title="Excluir Categoria" message={`Deseja excluir a categoria "${categoryToDelete?.name}" e todos os seus itens?`} />
       <Chat isOpen={isChatOpen} onClose={() => setChatOpen(false)} />
-      <button onClick={() => setChatOpen(true)} className="fixed bottom-20 right-6 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 z-20"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></button>
+      <button onClick={() => setChatOpen(true)} className="fixed bottom-6 right-6 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 z-20"><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg></button>
     </div>
   );
 };
