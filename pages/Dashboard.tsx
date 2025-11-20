@@ -1,0 +1,258 @@
+import React, { useState, useMemo } from 'react';
+import { useAppContext } from '../hooks/useAppContext';
+import Header from '../components/Header';
+import SideMenu from '../components/SideMenu';
+import AddCategoryModal from '../components/AddCategoryModal';
+import AddItemModal from '../components/AddItemModal';
+import ConfirmModal from '../components/ConfirmModal';
+import Chat from '../components/Chat';
+import { Item, Category } from '../types';
+
+const Dashboard: React.FC = () => {
+  const { categories, items, toggleItemCompleted, deleteItem, deleteCategory } = useAppContext();
+  const [isMenuOpen, setMenuOpen] = useState(false);
+  const [isCategoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoryToEdit, setCategoryToEdit] = useState<Category | null>(null);
+  const [isItemModalOpen, setItemModalOpen] = useState(false);
+  const [itemToEdit, setItemToEdit] = useState<Item | null>(null);
+  const [isChatOpen, setChatOpen] = useState(false);
+  
+  // Estados para Confirmação de Exclusão
+  const [categoryToDelete, setCategoryToDelete] = useState<{id: string, name: string} | null>(null);
+
+  const itemsByCategory = useMemo(() => {
+    const grouped: { [key: string]: Item[] } = {};
+    items.forEach(item => {
+      if (!grouped[item.categoryId]) {
+        grouped[item.categoryId] = [];
+      }
+      grouped[item.categoryId].push(item);
+    });
+    return grouped;
+  }, [items]);
+  
+  const categoryTotals = useMemo(() => {
+    const totals: { [key: string]: { total: number; pending: number; paid: number } } = {};
+    categories.forEach(category => {
+        const categoryItems = itemsByCategory[category.id] || [];
+        const total = categoryItems.reduce((sum, item) => sum + item.price, 0);
+        const pending = categoryItems
+            .filter(item => !item.completed)
+            .reduce((sum, item) => sum + item.price, 0);
+        const paid = total - pending;
+        totals[category.id] = { total, pending, paid };
+    });
+    return totals;
+  }, [categories, itemsByCategory]);
+
+  // Abre o modal de confirmação
+  const handleDeleteCategoryClick = (id: string, name: string) => {
+      setCategoryToDelete({ id, name });
+  }
+
+  // Executa a exclusão
+  const confirmDeleteCategory = () => {
+      if (categoryToDelete) {
+          deleteCategory(categoryToDelete.id);
+          setCategoryToDelete(null);
+      }
+  }
+  
+  const handleEditCategory = (category: Category) => {
+      setCategoryToEdit(category);
+      setCategoryModalOpen(true);
+  }
+
+  const handleCloseCategoryModal = () => {
+      setCategoryModalOpen(false);
+      setCategoryToEdit(null);
+  }
+
+  const handleEditItem = (item: Item) => {
+      setItemToEdit(item);
+      setItemModalOpen(true);
+  }
+
+  const handleCloseItemModal = () => {
+      setItemModalOpen(false);
+      setItemToEdit(null); // Limpa o item ao fechar
+  }
+
+  // FILTRO: Remove 'Arquivados' da visualização
+  const visibleCategories = categories.filter(c => c.name !== 'Arquivados');
+
+  return (
+    <div className="flex flex-col h-screen">
+      <Header onMenuClick={() => setMenuOpen(true)} />
+      <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} />
+      
+      <main className="flex-1 p-4 sm:p-6 overflow-y-auto bg-slate-100 dark:bg-slate-900">
+        <div className="max-w-7xl mx-auto">
+            {/* Top Controls */}
+            <div className="flex flex-wrap items-center justify-between mb-6 gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+                <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => { setCategoryToEdit(null); setCategoryModalOpen(true); }} 
+                        className="px-6 py-3 text-base font-semibold text-white bg-indigo-600 rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-transform transform hover:scale-105"
+                    >
+                        Add Categoria
+                    </button>
+                    <button 
+                        onClick={() => setItemModalOpen(true)} 
+                        className="px-6 py-3 text-base font-semibold text-white bg-green-600 rounded-lg shadow-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-transform transform hover:scale-105" 
+                        disabled={categories.length === 0}
+                    >
+                        Add Item
+                    </button>
+                </div>
+            </div>
+
+            {/* Category Rows */}
+            <div className="space-y-6">
+                {visibleCategories.length === 0 && (
+                    <div className="text-center py-10 px-4 bg-white dark:bg-gray-800 rounded-lg shadow">
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white">Sua lista de compras está vazia</h3>
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Comece adicionando uma categoria, depois você poderá adicionar itens.</p>
+                    </div>
+                )}
+                {visibleCategories.map(category => (
+                    <div key={category.id} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+                        <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center flex-wrap gap-2">
+                            <div className="flex items-center gap-3">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-white">{category.name}</h3>
+                                
+                                <div className="flex gap-1">
+                                    {/* Botão Editar Categoria */}
+                                    <button 
+                                        onClick={() => handleEditCategory(category)}
+                                        className="text-gray-400 hover:text-indigo-500 transition-colors p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                                        title="Editar Nome da Categoria"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                        </svg>
+                                    </button>
+
+                                    {/* Botão Excluir Categoria */}
+                                    <button 
+                                        onClick={() => handleDeleteCategoryClick(category.id, category.name)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                                        title="Excluir Categoria e Itens"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                             <div className="flex gap-4 text-sm font-semibold text-gray-700 dark:text-gray-300 text-right">
+                                <div>
+                                    <span>A Pagar: </span>
+                                    <span className="font-bold text-red-600 dark:text-red-400">R$ {(categoryTotals[category.id]?.pending || 0).toFixed(2)}</span>
+                                </div>
+                                <div>
+                                    <span>Já Pago: </span>
+                                    <span className="font-bold text-green-600 dark:text-green-400">R$ {(categoryTotals[category.id]?.paid || 0).toFixed(2)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                            {(itemsByCategory[category.id] || []).length > 0 ? (
+                                (itemsByCategory[category.id] || []).map(item => (
+                                <li key={item.id} className="p-4 flex justify-between items-center group hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                                    <div className="flex items-center flex-1 min-w-0 pr-4">
+                                        <input 
+                                            type="checkbox"
+                                            id={`item-${item.id}`}
+                                            checked={item.completed}
+                                            onChange={() => toggleItemCompleted(item.id)}
+                                            className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer flex-shrink-0"
+                                        />
+                                        <div className="ml-3 flex flex-col overflow-hidden">
+                                            <div className="flex items-center gap-2">
+                                                <label htmlFor={`item-${item.id}`} className={`text-gray-700 dark:text-gray-300 cursor-pointer font-medium truncate ${item.completed ? 'line-through opacity-60' : ''}`}>
+                                                    {item.name}
+                                                </label>
+                                                {item.link && (
+                                                    <a href={item.link} target="_blank" rel="noopener noreferrer" className="text-indigo-500 hover:text-indigo-700 flex-shrink-0" title="Abrir link do produto">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                                        </svg>
+                                                    </a>
+                                                )}
+                                            </div>
+                                            {item.observation && (
+                                                <p className={`text-xs text-gray-500 dark:text-gray-400 truncate ${item.completed ? 'opacity-60' : ''}`}>
+                                                    {item.observation}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 flex-shrink-0">
+                                        <span className={`font-mono text-gray-900 dark:text-white ${item.completed ? 'line-through opacity-60' : ''}`}>R$ {item.price.toFixed(2)}</span>
+                                        
+                                        {/* Botão Editar Item */}
+                                        <button 
+                                            onClick={() => handleEditItem(item)}
+                                            className="text-gray-300 hover:text-indigo-500 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                            title="Editar Item"
+                                            aria-label={`Editar ${item.name}`}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                            </svg>
+                                        </button>
+
+                                        {/* Botão Excluir Item */}
+                                        <button 
+                                            onClick={() => deleteItem(item.id)}
+                                            className="text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                            title="Excluir Item"
+                                            aria-label={`Excluir ${item.name}`}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </li>
+                                ))
+                            ) : (
+                                <li className="p-4 text-sm text-gray-500 dark:text-gray-400">Nenhum item nesta categoria ainda.</li>
+                            )}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+        </div>
+      </main>
+      
+      <AddCategoryModal isOpen={isCategoryModalOpen} onClose={handleCloseCategoryModal} categoryToEdit={categoryToEdit} />
+      <AddItemModal isOpen={isItemModalOpen} onClose={handleCloseItemModal} itemToEdit={itemToEdit} />
+      
+      {/* Modal de Confirmação de Exclusão */}
+      <ConfirmModal 
+          isOpen={!!categoryToDelete}
+          onClose={() => setCategoryToDelete(null)}
+          onConfirm={confirmDeleteCategory}
+          title="Excluir Categoria"
+          message={`Deseja excluir a categoria "${categoryToDelete?.name}" e todos os itens contidos nela?`}
+      />
+
+      <Chat isOpen={isChatOpen} onClose={() => setChatOpen(false)} />
+
+      {/* Chat FAB */}
+       <button
+        onClick={() => setChatOpen(true)}
+        className="fixed bottom-6 right-6 bg-purple-600 text-white p-4 rounded-full shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 z-20"
+        aria-label="Abrir chat"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      </button>
+    </div>
+  );
+};
+
+export default Dashboard;

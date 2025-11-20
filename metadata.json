@@ -1,0 +1,5 @@
+{
+  "name": "Lista de desejo",
+  "description": "An intelligent shopping list application that organizes items by category, tracks total cost, and manages a budget. Features user accounts, list history, and a clean, intuitive interface.",
+  "requestFramePermissions": []
+}
