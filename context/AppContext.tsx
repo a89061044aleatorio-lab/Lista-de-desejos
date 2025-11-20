@@ -32,40 +32,42 @@ export const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // --- FUNÇÃO BLINDADA PARA CONVERSÃO DE PREÇO (PADRÃO BRASIL) ---
 const safeParseFloat = (value: any): number => {
-  if (value === null || value === undefined) return 0;
-  if (typeof value === 'number') return isNaN(value) ? 0 : value;
-  
-  if (typeof value === 'string') {
-    let clean = value.trim();
+  try {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return isNaN(value) ? 0 : value;
     
-    // Se estiver vazio
-    if (clean === '') return 0;
+    if (typeof value === 'string') {
+      let clean = value.trim();
+      
+      // Se estiver vazio
+      if (clean === '') return 0;
 
-    // 1. Remove símbolos de moeda e espaços extras
-    clean = clean.replace('R$', '').replace(/\s/g, '');
+      // 1. Remove símbolos de moeda e espaços extras
+      clean = clean.replace('R$', '').replace(/\s/g, '');
 
-    // 2. Detecção de formato Brasileiro (1.200,50 ou 10,50)
-    // Se tiver vírgula, assumimos que é o separador decimal
-    if (clean.includes(',')) {
-      // Remove TODOS os pontos (separadores de milhar: 1.200 -> 1200)
-      clean = clean.replace(/\./g, '');
-      // Troca a vírgula por ponto (decimal: 1200,50 -> 1200.50)
-      clean = clean.replace(',', '.');
-    } 
-    // Se NÃO tiver vírgula, mas tiver múltiplos pontos (ex: 1.200.00)
-    else if ((clean.match(/\./g) || []).length > 1) {
-       clean = clean.replace(/\./g, '');
+      // 2. Detecção de formato Brasileiro (1.200,50 ou 10,50)
+      // Se tiver vírgula, assumimos que é o separador decimal
+      if (clean.includes(',')) {
+        // Remove TODOS os pontos (separadores de milhar: 1.200 -> 1200)
+        clean = clean.replace(/\./g, '');
+        // Troca a vírgula por ponto (decimal: 1200,50 -> 1200.50)
+        clean = clean.replace(',', '.');
+      } 
+      // Se NÃO tiver vírgula, mas tiver múltiplos pontos (ex: 1.200.00)
+      else if ((clean.match(/\./g) || []).length > 1) {
+         clean = clean.replace(/\./g, '');
+      }
+      // Se tiver APENAS UM ponto e parecer milhar (ex: 1.200), remove o ponto
+      // Isso corrige o erro onde "1.200" era lido como "1.2"
+      else if (clean.includes('.') && clean.indexOf('.') === clean.length - 4) {
+         clean = clean.replace(/\./g, '');
+      }
+
+      const parsed = parseFloat(clean);
+      return isNaN(parsed) ? 0 : parsed;
     }
-    // Se tiver APENAS UM ponto e parecer milhar (ex: 1.200), remove o ponto
-    // (Assume-se que ninguém vai digitar 1 real e 200 milésimos de centavo em lista de compras)
-    else if (clean.includes('.') && clean.split('.')[1].length === 3) {
-       // CUIDADO: Isso assume que 1.200 é mil e duzentos, não 1 ponto 2
-       // Para segurança em lista de compras, geralmente assumimos ponto como decimal se não houver vírgula,
-       // mas para evitar erro de "mil", vamos manter o padrão JS se for um ponto só.
-    }
-
-    const parsed = parseFloat(clean);
-    return isNaN(parsed) ? 0 : parsed;
+  } catch (e) {
+    return 0;
   }
   
   return 0;
