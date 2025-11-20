@@ -22,7 +22,7 @@ const OldLists: React.FC = () => {
                     .from('shopping_lists')
                     .select('*')
                     .eq('userId', user.id)
-                    .neq('id', currentList?.id || '') // Exclui a lista atual
+                    .neq('id', currentList?.id || '')
                     .order('createdAt', { ascending: false });
                 
                 if (data) setLists(data);
@@ -50,15 +50,14 @@ const OldLists: React.FC = () => {
                 .select('*')
                 .eq('listId', listId);
             if (data) {
-                 // Garantir que price seja número
-                const sanitizedItems = data.map(item => ({
+                 const sanitizedItems = data.map(item => ({
                     ...item,
-                    price: Number(item.price)
+                    price: Number(item.price) // Força número
                 }));
                 setSelectedListItems(sanitizedItems);
             }
         } catch (error) {
-            console.error("Erro ao buscar itens da lista:", error);
+            console.error("Erro ao buscar itens:", error);
         } finally {
             setLoadingItems(false);
         }
@@ -72,7 +71,7 @@ const OldLists: React.FC = () => {
             <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} />
             <main className="flex-1 p-6 bg-slate-100 dark:bg-slate-900 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">
-                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Listas Antigas e Backups</h1>
+                    <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-6">Listas Antigas</h1>
                     
                     {loading ? (
                         <div className="flex justify-center p-10">
@@ -88,18 +87,15 @@ const OldLists: React.FC = () => {
                                 <div key={list.id} className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
                                     <button 
                                         onClick={() => handleSelectList(list.id)}
-                                        className="w-full px-6 py-4 flex justify-between items-center text-left focus:outline-none hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                                        className="w-full px-6 py-4 flex justify-between items-center text-left hover:bg-gray-50 dark:hover:bg-gray-700/50"
                                     >
                                         <div>
                                             <h3 className="font-semibold text-gray-800 dark:text-white">{list.name}</h3>
                                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                                {new Date(list.createdAt).toLocaleDateString()} às {new Date(list.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                {new Date(list.createdAt).toLocaleDateString()}
                                             </p>
                                         </div>
-                                        <svg 
-                                            className={`w-5 h-5 text-gray-500 transform transition-transform ${selectedListId === list.id ? 'rotate-180' : ''}`} 
-                                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                                        >
+                                        <svg className={`w-5 h-5 text-gray-500 transition-transform ${selectedListId === list.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </button>
@@ -107,14 +103,14 @@ const OldLists: React.FC = () => {
                                     {selectedListId === list.id && (
                                         <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/30 p-4">
                                             {loadingItems ? (
-                                                <div className="text-center py-4 text-gray-500">Carregando itens...</div>
+                                                <div className="text-center py-4 text-gray-500">Carregando...</div>
                                             ) : selectedListItems.length === 0 ? (
-                                                <p className="text-sm text-gray-500 italic">Lista vazia.</p>
+                                                <p className="text-sm text-gray-500">Lista vazia.</p>
                                             ) : (
                                                 <div>
                                                     <ul className="space-y-2 mb-4">
                                                         {selectedListItems.map(item => (
-                                                            <li key={item.id} className="flex justify-between text-sm border-b border-gray-200 dark:border-gray-700 pb-2 last:border-0">
+                                                            <li key={item.id} className="flex justify-between text-sm border-b border-gray-200 dark:border-gray-700 pb-2">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className={`text-gray-700 dark:text-gray-300 ${item.completed ? 'line-through opacity-60' : ''}`}>
                                                                         {item.name}

@@ -12,9 +12,9 @@ export interface Category {
 export interface Item {
   id: string;
   name: string;
-  price: number;
+  price: number; // Garantindo que é sempre number
   categoryId: string;
-  userId:string;
+  userId: string;
   listId: string;
   completed: boolean;
   link?: string;

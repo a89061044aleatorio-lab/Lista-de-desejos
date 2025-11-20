@@ -20,14 +20,12 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
   useEffect(() => {
     if (isOpen) {
         if (itemToEdit) {
-            // Modo Edição: Preencher campos
             setName(itemToEdit.name);
-            setPrice(itemToEdit.price.toString());
+            setPrice(itemToEdit.price.toString().replace('.', ',')); // Mostra com vírgula para o usuário BR
             setCategoryId(itemToEdit.categoryId);
             setLink(itemToEdit.link || '');
             setObservation(itemToEdit.observation || '');
         } else {
-            // Modo Criação: Limpar campos
             setName('');
             setPrice('');
             setLink('');
@@ -42,13 +40,13 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && price && categoryId) {
-      // CORREÇÃO CRÍTICA: Troca vírgula por ponto antes de converter
-      const priceString = price.replace(',', '.');
-      const numericPrice = parseFloat(priceString);
+      // TRATAMENTO DE PREÇO ROBUSTO
+      // Troca vírgula por ponto (10,50 -> 10.50) e remove R$ se houver
+      const cleanPrice = price.replace('R$', '').replace(/\s/g, '').replace(',', '.');
+      const numericPrice = parseFloat(cleanPrice);
       
-      // Proteção contra NaN (Not a Number)
       if (isNaN(numericPrice)) {
-        alert("Por favor, insira um preço válido.");
+        alert("Por favor, digite um preço válido.");
         return;
       }
       
@@ -71,84 +69,77 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-sm max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
             {itemToEdit ? 'Editar Item' : 'Adicionar Novo Item'}
         </h3>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="item-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Item</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Nome do Item</label>
             <input
-              id="item-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              placeholder="Ex: Leite, Arroz..."
-              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              placeholder="Ex: Leite, Arroz"
+              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500"
               autoFocus
             />
           </div>
           <div>
-            <label htmlFor="item-price" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preço (Estimado)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preço</label>
             <input
-              id="item-price"
               type="text" 
               inputMode="decimal"
               placeholder="0,00"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               required
-              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500"
             />
-            <p className="text-xs text-gray-500 mt-1">Use vírgula ou ponto para centavos.</p>
           </div>
           <div>
-            <label htmlFor="item-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria</label>
             <select
-              id="item-category"
               value={categoryId}
               onChange={(e) => setCategoryId(e.target.value)}
               required
-              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500"
             >
-              <option value="" disabled>Selecione uma categoria</option>
+              <option value="" disabled>Selecione...</option>
               {categories.map(cat => (
                 <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
           </div>
-          
           <div>
-            <label htmlFor="item-link" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link do Produto (Opcional)</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Link (Opcional)</label>
             <input
-              id="item-link"
               type="url"
               value={link}
               onChange={(e) => setLink(e.target.value)}
               placeholder="https://..."
-              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500"
             />
           </div>
           <div>
-             <label htmlFor="item-obs" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Modelo / Observação (Opcional)</label>
+             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Obs (Opcional)</label>
             <textarea
-              id="item-obs"
               value={observation}
               onChange={(e) => setObservation(e.target.value)}
-              placeholder="Ex: Marca X, 500g, Sem glúten..."
+              placeholder="Marca, quantidade, etc."
               rows={2}
-              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+              className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 resize-none"
             />
           </div>
 
           <div className="mt-6 flex justify-end space-x-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:border-gray-500 dark:hover:bg-gray-500">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">
               Cancelar
             </button>
-            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-              {itemToEdit ? 'Salvar Alterações' : 'Adicionar Item'}
+            <button type="submit" className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700">
+              {itemToEdit ? 'Salvar' : 'Adicionar'}
             </button>
           </div>
         </form>

@@ -5,9 +5,9 @@ import { supabase } from '../supabaseClient';
 interface AppContextType {
   user: User | null;
   loading: boolean;
-  login: (userData: any) => Promise<boolean>;
+  login: (userData: {email: string, password: string}) => Promise<boolean>;
   logout: () => void;
-  register: (userData: any) => Promise<boolean>;
+  register: (userData: {email: string, password: string}) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
   updatePassword: (password: string) => Promise<boolean>;
   categories: Category[];
@@ -38,25 +38,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentList, setCurrentList] = useState<ShoppingList | null>(null);
   
-  // Estados derivados (calculados automaticamente)
+  // Estados derivados (Estatísticas)
   const [categoryStats, setCategoryStats] = useState<Record<string, CategoryStats>>({});
   const [grandTotal, setGrandTotal] = useState(0);
   const [grandTotalPaid, setGrandTotalPaid] = useState(0);
 
-  // Função PURA para calcular estatísticas locais
+  // --- LÓGICA DE CÁLCULO (CORRIGIDA) ---
   const calculateLocalStats = (currentItems: Item[]) => {
     const stats: Record<string, CategoryStats> = {};
     let total = 0;
     let totalPaid = 0;
     
     currentItems.forEach(item => {
-      // Garante conversão numérica
-      const price = Number(item.price) || 0;
+      // Proteção Extrema: Converte para número, se falhar vira 0
+      const price = typeof item.price === 'string' ? parseFloat(item.price) : Number(item.price);
+      const safePrice = isNaN(price) ? 0 : price;
       
       // Totais Globais
-      total += price;
+      total += safePrice;
       if (item.completed) {
-        totalPaid += price;
+        totalPaid += safePrice;
       }
 
       // Totais por Categoria
@@ -69,19 +70,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
       }
       
-      stats[item.categoryId].total += price;
+      stats[item.categoryId].total += safePrice;
       
       if (item.completed) {
-        stats[item.categoryId].paid += price;
+        stats[item.categoryId].paid += safePrice;
       } else {
-        stats[item.categoryId].pending += price;
+        stats[item.categoryId].pending += safePrice;
       }
     });
     
     return { stats, total, totalPaid };
   };
 
-  // Recalcula tudo sempre que 'items' mudar
+  // Atualiza totais sempre que os itens mudam
   useEffect(() => {
     const { stats, total, totalPaid } = calculateLocalStats(items);
     setCategoryStats(stats);
@@ -89,13 +90,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setGrandTotalPaid(totalPaid);
   }, [items]);
 
-  // Verificar sessão ativa ao iniciar
+  // --- AUTENTICAÇÃO E CARREGAMENTO ---
   useEffect(() => {
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          setUser({ id: session.user.id, email: session.user.email! });
+        if (session?.user && session.user.email) {
+          setUser({ id: session.user.id, email: session.user.email });
         }
       } catch (error) {
         console.error("Erro ao verificar sessão:", error);
@@ -105,18 +106,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setUser({ id: session.user.id, email: session.user.email! });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user && session.user.email) {
+        setUser({ id: session.user.id, email: session.user.email });
         setLoading(false);
       } else {
         setUser(null);
         setCategories([]);
         setItems([]);
         setMessages([]);
-        setCategoryStats({});
-        setGrandTotal(0);
-        setGrandTotalPaid(0);
         setCurrentList(null);
         setLoading(false);
       }
@@ -125,13 +123,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return () => subscription.unsubscribe();
   }, []);
 
-  // Carregar dados quando o usuário logar
+  // Carregar dados do Usuário
   useEffect(() => {
     const loadData = async () => {
       if (!user) return;
 
       try {
-        // 1. Buscar ou Criar Lista
+        // 1. Listas
         let listId = null;
         const { data: lists } = await supabase
           .from('shopping_lists')
@@ -144,15 +142,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setCurrentList(lists[0]);
           listId = lists[0].id;
         } else {
-          // Criar primeira lista
-          const newList = {
-            name: 'Minha Lista de Compras',
-            userId: user.id,
-            createdAt: new Date().toISOString()
-          };
           const { data: createdList } = await supabase
             .from('shopping_lists')
-            .insert([newList])
+            .insert([{ name: 'Minha Lista de Compras', userId: user.id }])
             .select()
             .single();
           
@@ -162,14 +154,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         }
 
-        // 2. Buscar Categorias
+        // 2. Categorias
         const { data: cats } = await supabase
           .from('categories')
           .select('*')
           .eq('userId', user.id);
         if (cats) setCategories(cats);
 
-        // 3. Buscar Itens e Mensagens se tiver lista
+        // 3. Itens (Com conversão de preço)
         if (listId) {
           const { data: listItems } = await supabase
             .from('items')
@@ -177,12 +169,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .eq('listId', listId);
           
           if (listItems) {
-              // Sanitização crítica: garante que string vire number
-              const sanitizedItems = listItems.map(item => ({
-                  ...item,
-                  price: Number(item.price)
+              const safeItems = listItems.map(i => ({
+                  ...i,
+                  price: Number(i.price) // Converte string do banco para number JS
               }));
-              setItems(sanitizedItems);
+              setItems(safeItems);
           }
 
           const { data: listMsgs } = await supabase
@@ -201,15 +192,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     loadData();
   }, [user]);
 
-  const login = async (userData: any) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: userData.email,
-      password: userData.password,
-    });
-    if (error) {
-      console.error(error);
-      return false;
-    }
+  // --- AÇÕES DE AUTENTICAÇÃO ---
+  const login = async (userData: {email: string, password: string}) => {
+    const { error } = await supabase.auth.signInWithPassword(userData);
+    if (error) return false;
     return true;
   };
 
@@ -217,46 +203,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await supabase.auth.signOut();
   };
 
-  const register = async (userData: any) => {
-    const { error } = await supabase.auth.signUp({
-      email: userData.email,
-      password: userData.password,
-    });
-    if (error) {
-      console.error(error);
-      return false;
-    }
+  const register = async (userData: {email: string, password: string}) => {
+    const { error } = await supabase.auth.signUp(userData);
+    if (error) return false;
     return true;
   };
 
   const resetPassword = async (email: string) => {
     const redirectTo = window.location.origin + '/#/update-password';
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: redirectTo,
-    });
-    if (error) {
-      console.error('Erro ao resetar senha:', error);
-      return false;
-    }
-    return true;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    return !error;
   };
 
   const updatePassword = async (password: string) => {
-    const { error } = await supabase.auth.updateUser({ password: password });
-    if (error) {
-      console.error('Erro ao atualizar senha:', error);
-      return false;
-    }
-    return true;
+    const { error } = await supabase.auth.updateUser({ password });
+    return !error;
   };
   
+  // --- AÇÕES DE DADOS ---
   const addCategory = async (name: string) => {
     if (!user) return;
-    const newCategory = {
-      name,
-      userId: user.id
-    };
-    const { data, error } = await supabase.from('categories').insert([newCategory]).select().single();
+    const { data, error } = await supabase
+      .from('categories')
+      .insert([{ name, userId: user.id }])
+      .select()
+      .single();
+      
     if (data && !error) {
       setCategories(prev => [...prev, data]);
     }
@@ -264,66 +236,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const updateCategory = async (categoryId: string, name: string) => {
     setCategories(prev => prev.map(c => c.id === categoryId ? { ...c, name } : c));
-    const { error } = await supabase
-      .from('categories')
-      .update({ name })
-      .eq('id', categoryId);
-    if (error) console.error("Erro ao atualizar categoria:", error);
+    await supabase.from('categories').update({ name }).eq('id', categoryId);
   };
 
-  const archiveCategory = async (categoryId: string) => {
-      if (!user) return;
-      deleteCategory(categoryId);
+  const archiveCategory = (categoryId: string) => {
+      deleteCategory(categoryId); // Mantendo comportamento simplificado solicitado
   };
 
   const deleteCategory = async (categoryId: string) => {
       if (!user) return;
       
+      // Otimista: Remove da tela imediatamente
+      const previousCategories = [...categories];
+      const previousItems = [...items];
+      
+      setCategories(prev => prev.filter(c => c.id !== categoryId));
+      setItems(prev => prev.filter(i => i.categoryId !== categoryId));
+
       try {
-          // Tenta deletar direto (confiando no ON DELETE CASCADE do banco)
+          // 1. Tenta deletar a categoria (Se Cascade estiver ativo no SQL, apaga tudo)
           const { error: catError } = await supabase
               .from('categories')
               .delete()
               .eq('id', categoryId);
 
           if (catError) {
-               // Fallback: Se falhar, tenta deletar itens manualmente
-              const { error: itemsError } = await supabase
-                  .from('items')
-                  .delete()
-                  .eq('categoryId', categoryId);
+              console.warn("Cascade falhou ou não configurado. Tentando exclusão manual de itens...");
               
-              if (itemsError) {
-                  alert("Erro ao limpar itens: " + itemsError.message);
-                  return;
-              }
+              // Fallback: Apaga itens manualmente primeiro
+              await supabase.from('items').delete().eq('categoryId', categoryId);
+              const { error: retryError } = await supabase.from('categories').delete().eq('id', categoryId);
               
-              const { error: catRetryError } = await supabase
-                  .from('categories')
-                  .delete()
-                  .eq('id', categoryId);
-                  
-              if (catRetryError) {
-                  alert("Erro ao excluir categoria: " + catRetryError.message);
-                  return;
-              }
+              if (retryError) throw retryError;
           }
-
-          // Atualiza UI
-          setCategories(prev => prev.filter(c => c.id !== categoryId));
-          setItems(prev => prev.filter(i => i.categoryId !== categoryId));
-
       } catch (error: any) {
-          console.error("Erro inesperado:", error);
+          console.error("Erro fatal ao excluir categoria:", error);
+          alert("Não foi possível excluir a categoria. Tente novamente.");
+          // Rollback em caso de erro
+          setCategories(previousCategories);
+          setItems(previousItems);
       }
   };
   
   const addItem = async (name: string, price: number, categoryId: string, link?: string, observation?: string) => {
       if(!user || !currentList) return;
       
-      // Garante que price é um número
-      const numericPrice = Number(price);
-
+      const numericPrice = Number(price); // Garantia final
+      
       const newItem = {
           name,
           price: numericPrice,
@@ -335,47 +294,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           observation: observation || null
       };
       
-      // Optimistic UI: Adiciona temporariamente com ID temporário
+      // UI Otimista
       const tempId = `temp-${Date.now()}`;
       setItems(prev => [...prev, { ...newItem, id: tempId }]);
       
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
       
       if (data && !error) {
-        // Substitui o item temporário pelo real do banco e garante que o preço seja número
         setItems(prev => prev.map(i => i.id === tempId ? { ...data, price: Number(data.price) } : i));
-      } else if (error) {
-          console.error("Erro ao adicionar item:", error);
-          // Reverte em caso de erro
-          setItems(prev => prev.filter(i => i.id !== tempId));
+      } else {
+          setItems(prev => prev.filter(i => i.id !== tempId)); // Remove se falhar
       }
   };
 
   const updateItem = async (itemId: string, updates: Partial<Item>) => {
-      // Garante que, se houver atualização de preço, ele seja numérico na UI otimista
+      // Garante numérico se houver preço
       const cleanUpdates = { ...updates };
       if (cleanUpdates.price !== undefined) {
           cleanUpdates.price = Number(cleanUpdates.price);
       }
 
       setItems(prev => prev.map(item => item.id === itemId ? { ...item, ...cleanUpdates } : item));
-      
-      const { error } = await supabase.from('items').update(cleanUpdates).eq('id', itemId);
-      if (error) console.error("Erro ao atualizar item:", error);
+      await supabase.from('items').update(cleanUpdates).eq('id', itemId);
   };
 
   const deleteItem = async (itemId: string) => {
       setItems(prev => prev.filter(i => i.id !== itemId));
-      const { error } = await supabase.from('items').delete().eq('id', itemId);
-      if (error) console.error("Erro ao deletar item:", error);
+      await supabase.from('items').delete().eq('id', itemId);
   };
 
   const toggleItemCompleted = async (itemId: string) => {
-      const itemToUpdate = items.find(i => i.id === itemId);
-      if (itemToUpdate) {
-          const updatedStatus = !itemToUpdate.completed;
-          setItems(prev => prev.map(item => item.id === itemId ? { ...item, completed: updatedStatus } : item));
-          await supabase.from('items').update({ completed: updatedStatus }).eq('id', itemId);
+      const item = items.find(i => i.id === itemId);
+      if (item) {
+          const newState = !item.completed;
+          setItems(prev => prev.map(i => i.id === itemId ? { ...i, completed: newState } : i));
+          await supabase.from('items').update({ completed: newState }).eq('id', itemId);
       }
   }
 
@@ -388,9 +341,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           timestamp: new Date().toISOString(),
           userEmail: user.email,
       };
+      
+      // UI Otimista para Chat
+      const tempId = `msg-${Date.now()}`;
+      const optimisticMessage = { ...newMessage, id: tempId, userEmail: user.email! };
+      setMessages(prev => [...prev, optimisticMessage]);
+
       const { data, error } = await supabase.from('messages').insert([newMessage]).select().single();
       if (data && !error) {
-        setMessages(prev => [...prev, data]);
+         setMessages(prev => prev.map(m => m.id === tempId ? data : m));
       }
   }
 
