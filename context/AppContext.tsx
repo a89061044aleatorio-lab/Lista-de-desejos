@@ -35,10 +35,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [items, setItems] = useState<Item[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentList, setCurrentList] = useState<ShoppingList | null>(null);
-  // Armazena os totais calculados pelo banco. Chave é o categoryId
+  // Armazena os totais calculados LOCALMENTE. Chave é o categoryId
   const [categoryStats, setCategoryStats] = useState<Record<string, CategoryStats>>({});
 
-  // Função auxiliar para calcular estatísticas localmente (Fallback)
+  // Função PURA para calcular estatísticas usando o Javascript do navegador
+  // Isso garante que a soma funcione independente do banco de dados
   const calculateLocalStats = (currentItems: Item[]) => {
     const stats: Record<string, CategoryStats> = {};
     
@@ -52,7 +53,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
       }
       
+      // Garante que é número para não somar texto ("10" + "20" = 30, não "1020")
       const price = Number(item.price) || 0;
+      
       stats[item.categoryId].total += price;
       
       if (item.completed) {
@@ -64,43 +67,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return stats;
   };
 
-  // Função para buscar as estatísticas atualizadas do banco
-  const fetchStats = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase.from('category_stats').select('*');
-      
-      if (data && !error) {
-        // SUCESSO: Transforma array em objeto para acesso rápido
-        const statsMap: Record<string, CategoryStats> = {};
-        data.forEach((stat: any) => {
-          statsMap[stat.categoryId] = {
-            categoryId: stat.categoryId,
-            total: Number(stat.total),
-            paid: Number(stat.paid),
-            pending: Number(stat.pending)
-          };
-        });
-        setCategoryStats(statsMap);
-      } else {
-        throw new Error(error?.message || "Erro desconhecido ao buscar stats");
-      }
-    } catch (error) {
-      console.warn("View 'category_stats' não encontrada ou erro de conexão. Usando cálculo local.", error);
-      // FALLBACK: Se a view do banco falhar, calcula usando o JavaScript local
-      const localStats = calculateLocalStats(items);
-      setCategoryStats(localStats);
-    }
-  };
-
-  // Recalcular localmente sempre que 'items' mudar, para garantir agilidade na interface
-  // Isso serve como um "optimistic update" enquanto o banco processa
+  // Monitora a lista de items. Sempre que um item for adicionado, removido, editado ou baixado do banco,
+  // o App recalcula os totais automaticamente.
   useEffect(() => {
-    if (items.length > 0) {
-        const localStats = calculateLocalStats(items);
-        setCategoryStats(localStats);
-    }
+    const newStats = calculateLocalStats(items);
+    setCategoryStats(newStats);
   }, [items]);
 
   // Verificar sessão ativa ao iniciar
@@ -189,13 +160,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .eq('listId', listId);
           
           if (listItems) {
-              // Garantir que price seja número, pois o banco pode retornar string para tipos numeric
+              // Garantir que price seja número, pois o banco pode retornar string
               const sanitizedItems = listItems.map(item => ({
                   ...item,
                   price: Number(item.price)
               }));
               setItems(sanitizedItems);
-              // O useEffect([items]) vai rodar e calcular os stats iniciais
           }
 
           const { data: listMsgs } = await supabase
@@ -205,9 +175,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .order('timestamp', { ascending: true });
           if (listMsgs) setMessages(listMsgs);
         }
-        
-        // 4. Tentar buscar do banco para garantir sincronia
-        await fetchStats();
 
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -290,11 +257,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     if (error) {
       console.error("Erro ao atualizar categoria:", error);
-      alert("Erro ao salvar o nome da categoria no banco.");
     }
   };
 
-  // Mantido para compatibilidade, mas Dashboard usa deleteCategory
   const archiveCategory = async (categoryId: string) => {
       if (!user) return;
       deleteCategory(categoryId);
@@ -337,7 +302,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           setCategories(prev => prev.filter(c => c.id !== categoryId));
           setItems(prev => prev.filter(i => i.categoryId !== categoryId));
-          // O useEffect de items vai atualizar os stats
 
       } catch (error: any) {
           console.error("Erro inesperado ao excluir categoria:", error);
@@ -357,18 +321,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           link: link || null,
           observation: observation || null
       };
+      
+      // Atualização Otimista: Adiciona na tela antes mesmo do banco responder
+      // Criamos um ID temporário que será substituído depois
+      // Isso faz o app parecer muito rápido
+      const tempId = `temp-${Date.now()}`;
+      const tempItem = { ...newItem, id: tempId, price: Number(price) };
+      
+      // Atualiza o banco
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
+      
       if (data && !error) {
+        // Se deu certo, adiciona o item real (com ID do banco) na lista
         setItems(prev => [...prev, { ...data, price: Number(data.price) }]);
-        // fetchStats será chamado automaticamente ou via useEffect
       } else if (error) {
           console.error("Erro ao adicionar item:", error);
       }
   };
 
   const updateItem = async (itemId: string, updates: Partial<Item>) => {
+      // Atualiza localmente
       setItems(prev => prev.map(item => item.id === itemId ? { ...item, ...updates } : item));
       
+      // Atualiza no banco
       const { error } = await supabase.from('items').update(updates).eq('id', itemId);
       if (error) {
           console.error("Erro ao atualizar item:", error);
@@ -376,10 +351,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteItem = async (itemId: string) => {
+      // Remove localmente
+      setItems(prev => prev.filter(i => i.id !== itemId));
+
+      // Remove no banco
       const { error } = await supabase.from('items').delete().eq('id', itemId);
-      if (!error) {
-        setItems(prev => prev.filter(i => i.id !== itemId));
-      } else {
+      if (error) {
           console.error("Erro ao deletar item:", error);
       }
   };
@@ -388,8 +365,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const itemToUpdate = items.find(i => i.id === itemId);
       if (itemToUpdate) {
           const updatedStatus = !itemToUpdate.completed;
+          
+          // Atualiza localmente
           setItems(prev => prev.map(item => item.id === itemId ? { ...item, completed: updatedStatus } : item));
           
+          // Atualiza no banco
           const { error } = await supabase.from('items').update({ completed: updatedStatus }).eq('id', itemId);
           if (error) {
               console.error("Erro ao atualizar status do item:", error);
