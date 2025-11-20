@@ -12,13 +12,13 @@ export interface Category {
 export interface Item {
   id: string;
   name: string;
-  price: number; // Garantindo que é sempre number
+  price: number;
   categoryId: string;
   userId: string;
   listId: string;
   completed: boolean;
-  link?: string;
-  observation?: string;
+  link: string | null;        // Alterado de ? (undefined) para string | null
+  observation: string | null; // Alterado de ? (undefined) para string | null
 }
 
 export interface ShoppingList {

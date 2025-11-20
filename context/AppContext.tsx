@@ -16,7 +16,7 @@ interface AppContextType {
   archiveCategory: (categoryId: string) => void;
   updateCategory: (categoryId: string, name: string) => void;
   items: Item[];
-  addItem: (name: string, price: number, categoryId: string, link?: string, observation?: string) => void;
+  addItem: (name: string, price: number, categoryId: string, link?: string | null, observation?: string | null) => void;
   updateItem: (itemId: string, updates: Partial<Item>) => void;
   deleteItem: (itemId: string) => void;
   toggleItemCompleted: (itemId: string) => void;
@@ -169,9 +169,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .eq('listId', listId);
           
           if (listItems) {
-              const safeItems = listItems.map(i => ({
+              const safeItems: Item[] = listItems.map(i => ({
                   ...i,
-                  price: Number(i.price) // Converte string do banco para number JS
+                  price: Number(i.price), // Converte string do banco para number JS
+                  link: i.link || null,
+                  observation: i.observation || null
               }));
               setItems(safeItems);
           }
@@ -278,12 +280,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
   
-  const addItem = async (name: string, price: number, categoryId: string, link?: string, observation?: string) => {
+  const addItem = async (name: string, price: number, categoryId: string, link?: string | null, observation?: string | null) => {
       if(!user || !currentList) return;
       
       const numericPrice = Number(price); // Garantia final
       
-      const newItem = {
+      const newItem: Omit<Item, 'id'> = {
           name,
           price: numericPrice,
           categoryId,
@@ -296,7 +298,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       
       // UI Otimista
       const tempId = `temp-${Date.now()}`;
-      setItems(prev => [...prev, { ...newItem, id: tempId }]);
+      const optimisticItem: Item = { ...newItem, id: tempId };
+      setItems(prev => [...prev, optimisticItem]);
       
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
       

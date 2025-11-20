@@ -50,16 +50,20 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
         return;
       }
       
+      // Define explicitamente como null se estiver vazio
+      const finalLink = link.trim() || null;
+      const finalObservation = observation.trim() || null;
+      
       if (itemToEdit) {
           updateItem(itemToEdit.id, {
               name: name.trim(),
               price: numericPrice,
               categoryId,
-              link: link.trim() || undefined,
-              observation: observation.trim() || undefined
+              link: finalLink,
+              observation: finalObservation
           });
       } else {
-          addItem(name.trim(), numericPrice, categoryId, link.trim(), observation.trim());
+          addItem(name.trim(), numericPrice, categoryId, finalLink, finalObservation);
       }
       
       onClose();
