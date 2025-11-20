@@ -42,7 +42,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && price && categoryId) {
-      const numericPrice = parseFloat(price);
+      // CORREÇÃO CRÍTICA: Troca vírgula por ponto antes de converter
+      const priceString = price.replace(',', '.');
+      const numericPrice = parseFloat(priceString);
+      
+      // Proteção contra NaN (Not a Number)
+      if (isNaN(numericPrice)) {
+        alert("Por favor, insira um preço válido.");
+        return;
+      }
       
       if (itemToEdit) {
           updateItem(itemToEdit.id, {
@@ -86,15 +94,15 @@ const AddItemModal: React.FC<AddItemModalProps> = ({ isOpen, onClose, itemToEdit
             <label htmlFor="item-price" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preço (Estimado)</label>
             <input
               id="item-price"
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0.00"
+              type="text" 
+              inputMode="decimal"
+              placeholder="0,00"
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               required
               className="w-full px-3 py-2 mt-1 text-gray-900 bg-gray-50 border border-gray-300 rounded-md shadow-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             />
+            <p className="text-xs text-gray-500 mt-1">Use vírgula ou ponto para centavos.</p>
           </div>
           <div>
             <label htmlFor="item-category" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Categoria</label>
