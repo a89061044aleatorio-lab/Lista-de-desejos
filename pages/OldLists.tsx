@@ -49,7 +49,14 @@ const OldLists: React.FC = () => {
                 .from('items')
                 .select('*')
                 .eq('listId', listId);
-            if (data) setSelectedListItems(data);
+            if (data) {
+                 // Garantir que price seja número
+                const sanitizedItems = data.map(item => ({
+                    ...item,
+                    price: Number(item.price)
+                }));
+                setSelectedListItems(sanitizedItems);
+            }
         } catch (error) {
             console.error("Erro ao buscar itens da lista:", error);
         } finally {
@@ -57,7 +64,7 @@ const OldLists: React.FC = () => {
         }
     };
 
-    const calculateTotal = (items: Item[]) => items.reduce((acc, item) => acc + item.price, 0);
+    const calculateTotal = (items: Item[]) => items.reduce((acc, item) => acc + Number(item.price), 0);
 
     return (
         <div className="flex flex-col h-screen">

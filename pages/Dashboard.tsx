@@ -35,10 +35,11 @@ const Dashboard: React.FC = () => {
     const totals: { [key: string]: { total: number; pending: number; paid: number } } = {};
     categories.forEach(category => {
         const categoryItems = itemsByCategory[category.id] || [];
-        const total = categoryItems.reduce((sum, item) => sum + item.price, 0);
+        // Force Number conversion to ensure sums are correct, not string concatenation
+        const total = categoryItems.reduce((sum, item) => sum + Number(item.price), 0);
         const pending = categoryItems
             .filter(item => !item.completed)
-            .reduce((sum, item) => sum + item.price, 0);
+            .reduce((sum, item) => sum + Number(item.price), 0);
         const paid = total - pending;
         totals[category.id] = { total, pending, paid };
     });

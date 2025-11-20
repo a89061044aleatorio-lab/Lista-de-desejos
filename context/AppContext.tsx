@@ -118,7 +118,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             .from('items')
             .select('*')
             .eq('listId', listId);
-          if (listItems) setItems(listItems);
+          
+          if (listItems) {
+              // Garantir que price seja número, pois o banco pode retornar string para tipos numeric
+              const sanitizedItems = listItems.map(item => ({
+                  ...item,
+                  price: Number(item.price)
+              }));
+              setItems(sanitizedItems);
+          }
 
           const { data: listMsgs } = await supabase
             .from('messages')
@@ -277,7 +285,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
       if (data && !error) {
-        setItems(prev => [...prev, data]);
+        // Garantir que price seja número
+        setItems(prev => [...prev, { ...data, price: Number(data.price) }]);
       } else if (error) {
           console.error("Erro ao adicionar item:", error);
       }
