@@ -38,13 +38,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Armazena os totais calculados pelo banco. Chave é o categoryId
   const [categoryStats, setCategoryStats] = useState<Record<string, CategoryStats>>({});
 
+  // Função auxiliar para calcular estatísticas localmente (Fallback)
+  const calculateLocalStats = (currentItems: Item[]) => {
+    const stats: Record<string, CategoryStats> = {};
+    
+    currentItems.forEach(item => {
+      if (!stats[item.categoryId]) {
+        stats[item.categoryId] = {
+          categoryId: item.categoryId,
+          total: 0,
+          paid: 0,
+          pending: 0
+        };
+      }
+      
+      const price = Number(item.price) || 0;
+      stats[item.categoryId].total += price;
+      
+      if (item.completed) {
+        stats[item.categoryId].paid += price;
+      } else {
+        stats[item.categoryId].pending += price;
+      }
+    });
+    return stats;
+  };
+
   // Função para buscar as estatísticas atualizadas do banco
   const fetchStats = async () => {
     if (!user) return;
+    
     try {
       const { data, error } = await supabase.from('category_stats').select('*');
+      
       if (data && !error) {
-        // Transforma array em objeto para acesso rápido: stats['cat-id']
+        // SUCESSO: Transforma array em objeto para acesso rápido
         const statsMap: Record<string, CategoryStats> = {};
         data.forEach((stat: any) => {
           statsMap[stat.categoryId] = {
@@ -55,11 +83,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           };
         });
         setCategoryStats(statsMap);
+      } else {
+        throw new Error(error?.message || "Erro desconhecido ao buscar stats");
       }
     } catch (error) {
-      console.error("Erro ao buscar estatísticas:", error);
+      console.warn("View 'category_stats' não encontrada ou erro de conexão. Usando cálculo local.", error);
+      // FALLBACK: Se a view do banco falhar, calcula usando o JavaScript local
+      const localStats = calculateLocalStats(items);
+      setCategoryStats(localStats);
     }
   };
+
+  // Recalcular localmente sempre que 'items' mudar, para garantir agilidade na interface
+  // Isso serve como um "optimistic update" enquanto o banco processa
+  useEffect(() => {
+    if (items.length > 0) {
+        const localStats = calculateLocalStats(items);
+        setCategoryStats(localStats);
+    }
+  }, [items]);
 
   // Verificar sessão ativa ao iniciar
   useEffect(() => {
@@ -153,6 +195,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   price: Number(item.price)
               }));
               setItems(sanitizedItems);
+              // O useEffect([items]) vai rodar e calcular os stats iniciais
           }
 
           const { data: listMsgs } = await supabase
@@ -163,7 +206,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (listMsgs) setMessages(listMsgs);
         }
         
-        // 4. Buscar Estatísticas Iniciais
+        // 4. Tentar buscar do banco para garantir sincronia
         await fetchStats();
 
       } catch (error) {
@@ -261,37 +304,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!user) return;
       
       try {
-          const { error: itemsError } = await supabase
-              .from('items')
-              .delete()
-              .eq('categoryId', categoryId);
-          
-          if (itemsError) {
-              console.error("Erro ao limpar itens da categoria:", itemsError);
-              alert("Erro ao tentar apagar os itens desta categoria: " + itemsError.message);
-              return;
-          }
-
+          // Tenta deletar direto (cascade)
           const { error: catError } = await supabase
               .from('categories')
               .delete()
               .eq('id', categoryId);
 
           if (catError) {
-              console.error("Erro ao excluir categoria:", catError);
-              if (catError.code === '23503') {
-                   alert("O banco de dados impediu a exclusão pois ainda existem itens vinculados. Isso geralmente se resolve rodando o Script SQL de 'Cascade' no painel do Supabase.");
-              } else {
-                   alert("Erro ao excluir categoria: " + catError.message);
+               // Se falhar (provavelmente FK constraint sem cascade), tenta deletar itens primeiro
+              const { error: itemsError } = await supabase
+                  .from('items')
+                  .delete()
+                  .eq('categoryId', categoryId);
+              
+              if (itemsError) {
+                  console.error("Erro ao limpar itens da categoria:", itemsError);
+                  alert("Erro ao excluir: " + itemsError.message);
+                  return;
               }
-              return;
+              
+              // Tenta deletar categoria novamente
+              const { error: catRetryError } = await supabase
+                  .from('categories')
+                  .delete()
+                  .eq('id', categoryId);
+                  
+              if (catRetryError) {
+                  alert("Erro final ao excluir categoria: " + catRetryError.message);
+                  return;
+              }
           }
 
           setCategories(prev => prev.filter(c => c.id !== categoryId));
           setItems(prev => prev.filter(i => i.categoryId !== categoryId));
-          
-          // Atualiza estatísticas após exclusão
-          fetchStats();
+          // O useEffect de items vai atualizar os stats
 
       } catch (error: any) {
           console.error("Erro inesperado ao excluir categoria:", error);
@@ -314,7 +360,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data, error } = await supabase.from('items').insert([newItem]).select().single();
       if (data && !error) {
         setItems(prev => [...prev, { ...data, price: Number(data.price) }]);
-        fetchStats(); // Atualiza totais
+        // fetchStats será chamado automaticamente ou via useEffect
       } else if (error) {
           console.error("Erro ao adicionar item:", error);
       }
@@ -326,8 +372,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { error } = await supabase.from('items').update(updates).eq('id', itemId);
       if (error) {
           console.error("Erro ao atualizar item:", error);
-      } else {
-          fetchStats(); // Atualiza totais se o preço ou status mudar
       }
   };
 
@@ -335,7 +379,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { error } = await supabase.from('items').delete().eq('id', itemId);
       if (!error) {
         setItems(prev => prev.filter(i => i.id !== itemId));
-        fetchStats(); // Atualiza totais
       } else {
           console.error("Erro ao deletar item:", error);
       }
@@ -348,8 +391,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           setItems(prev => prev.map(item => item.id === itemId ? { ...item, completed: updatedStatus } : item));
           
           const { error } = await supabase.from('items').update({ completed: updatedStatus }).eq('id', itemId);
-          if (!error) {
-              fetchStats(); // Atualiza totais
+          if (error) {
+              console.error("Erro ao atualizar status do item:", error);
           }
       }
   }
